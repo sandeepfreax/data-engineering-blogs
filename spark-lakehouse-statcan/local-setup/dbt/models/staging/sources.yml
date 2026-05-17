@@ -1,0 +1,12 @@
+version: 2
+
+sources:
+  - name: silver
+    description: "Silver layer Delta tables — referenced by path in staging models"
+    schema: default
+    tables:
+      - name: lfs_province
+        description: "LFS province Silver table (documentation only — not used for SQL resolution)"
+      - name: lfs_industry
+        description: "LFS industry Silver table (documentation only — not used for SQL resolution)"
+    # No tests here — tests live in stg_lfs_province.yml and stg_lfs_industry.yml

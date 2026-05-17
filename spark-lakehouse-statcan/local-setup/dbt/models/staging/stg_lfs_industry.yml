@@ -1,0 +1,22 @@
+version: 2
+
+models:
+  - name: stg_lfs_industry
+    description: >
+      Staging view over Silver lfs_industry.
+      Filtered to Seasonally adjusted Estimates, suppressed rows excluded.
+    columns:
+      - name: ref_date
+        tests:
+          - not_null
+      - name: geo
+        tests:
+          - not_null
+      - name: naics_industry
+        description: "NAICS sector label"
+        tests:
+          - not_null
+      - name: value
+        description: "Employment in thousands. Never null after suppression filter."
+        tests:
+          - not_null

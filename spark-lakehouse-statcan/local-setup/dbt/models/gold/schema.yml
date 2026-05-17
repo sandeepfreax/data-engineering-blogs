@@ -1,0 +1,64 @@
+version: 2
+
+models:
+  - name: dim_geo
+    description: >
+      Geography dimension with surrogate keys, region groupings, and
+      national vs province classification.
+    columns:
+      - name: geo_key
+        description: "Surrogate key — MD5 hash of dguid + geo_name"
+        tests:
+          - not_null
+          - unique
+      - name: geo_name
+        description: "Province or territory name as published by StatCan"
+        tests:
+          - not_null
+          - unique
+      - name: dguid
+        tests:
+          - not_null
+      - name: geo_level
+        tests:
+          - not_null
+          - accepted_values:
+              values: ["National", "Province"]
+      - name: geo_region
+        tests:
+          - not_null
+          - accepted_values:
+              values: ["National", "Western Canada", "Central Canada", "Atlantic Canada", "Other"]
+
+  - name: fct_employment_monthly
+    description: >
+      Monthly employment metrics by province, gender and labour force characteristic.
+      Grain: one row per (ref_date, geo, labour_force_characteristic, gender, age_group).
+      Filtered to age_group = '15 years and over'.
+      Joined to industry totals for cross-check.
+    columns:
+      - name: fact_key
+        description: "Surrogate key — MD5 hash of grain columns"
+        tests:
+          - not_null
+          - unique
+      - name: ref_date
+        tests:
+          - not_null
+      - name: geo
+        tests:
+          - not_null
+      - name: labour_force_characteristic
+        tests:
+          - not_null
+      - name: gender
+        tests:
+          - not_null
+      - name: value_thousands
+        description: "Employment value in thousands of persons"
+        tests:
+          - not_null
+      - name: value_actual
+        description: "value_thousands * 1000 — actual person count estimate"
+        tests:
+          - not_null

@@ -1,0 +1,48 @@
+version: 2
+
+models:
+  - name: mart_employment_trends
+    description: |
+      Gold analytical mart enriched with MoM/YoY trend metrics and SCD2 surrogate keys.
+      Built by 04_gold_employment_mart.py on top of dbt's fct_employment_monthly.
+      Grain: one row per (ref_date, geo, labour_force_characteristic, gender, age_group)
+      Filtered to Total - Gender and 15 years and over age group only.
+
+    columns:
+      - name: fact_key
+        tests: [not_null, unique]
+      - name: ref_date
+        tests: [not_null]
+      - name: geo
+        tests: [not_null]
+      - name: labour_force_characteristic
+        tests: [not_null]
+      - name: gender
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['Total - Gender']
+      - name: age_group
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['15 years and over']
+      - name: value_thousands
+        tests: [not_null]
+      - name: value_actual
+        tests: [not_null]
+      - name: mom_change_thousands
+        tests:
+          - not_null:
+              where: "ref_date > (SELECT MIN(ref_date) FROM {{ this }})"
+              config:
+                severity: warn
+      - name: rolling_3m_avg_thousands
+        tests: [not_null]
+      - name: geo_key
+        tests: [not_null]
+      - name: geo_region
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['Western Canada','Central Canada','Atlantic Canada','National','Other']

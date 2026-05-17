@@ -1,0 +1,52 @@
+version: 2
+
+models:
+  - name: stg_lfs_province
+    description: >
+      Staging view over Silver lfs_province.
+      Filtered to Seasonally adjusted Estimates, suppressed rows excluded.
+      This is the base model for all province-level employment analysis.
+    columns:
+      - name: ref_date
+        description: "First day of reference month (DATE)"
+        tests:
+          - not_null
+      - name: geo
+        description: "Province or territory"
+        tests:
+          - not_null
+          - accepted_values:
+              values: [
+                "Canada",
+                "Newfoundland and Labrador",
+                "Prince Edward Island",
+                "Nova Scotia",
+                "New Brunswick",
+                "Quebec",
+                "Ontario",
+                "Manitoba",
+                "Saskatchewan",
+                "Alberta",
+                "British Columbia"
+              ]
+      - name: labour_force_characteristic
+        description: "Labour market metric"
+        tests:
+          - not_null
+      - name: gender
+        description: "Gender category"
+        tests:
+          - not_null
+          - accepted_values:
+              values: ["Total - Gender", "Men+", "Women+"]
+      - name: value
+        description: "Value in thousands (persons) or percent. Never null after suppression filter."
+        tests:
+          - not_null
+      - name: is_suppressed
+        description: "True if value was suppressed by StatCan for confidentiality"
+        data_tests:
+          - not_null
+          - accepted_values:
+              values: [false]   # staging filter guarantees no suppressed rows
+              quote: false

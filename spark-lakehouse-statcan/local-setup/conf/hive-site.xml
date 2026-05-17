@@ -1,0 +1,15 @@
+<?xml version="1.0"?>
+<configuration>
+  <property>
+    <name>javax.jdo.option.ConnectionURL</name>
+    <value>jdbc:derby:;databaseName=/Users/sandeepkumar/data_engineer/data-engineering-blogs/spark-lakehouse-statcan/local-setup/spark-warehouse/metastore_db;create=true</value>
+  </property>
+  <property>
+    <name>javax.jdo.option.ConnectionDriverName</name>
+    <value>org.apache.derby.jdbc.EmbeddedDriver</value>
+  </property>
+  <property>
+    <name>hive.metastore.warehouse.dir</name>
+    <value>/Users/sandeepkumar/data_engineer/data-engineering-blogs/spark-lakehouse-statcan/local-setup/spark-warehouse</value>
+  </property>
+</configuration>
