@@ -23,7 +23,7 @@
 hs_err_pid*
 replay_pid*
 
-*/*.csv
+*.csv
 .idea
 delta_tables/
 spark-warehouse/
@@ -32,3 +32,8 @@ spark-warehouse/
 .env
 # But do NOT ignore the example template
 !.env.example
+
+.venv/
+
+dbt_packages/
+target/
