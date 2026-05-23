@@ -1,0 +1,26 @@
+# VibeStream dbt Project
+# ======================
+# Transforms Silver Delta Lake data into Gold ML Feature tables.
+# Target: PostgreSQL (local dev) → Databricks/Snowflake (production)
+
+name: vibestream
+version: '1.0.0'
+config-version: 2
+
+profile: vibestream_local
+
+model-paths: ["models"]
+test-paths: ["tests"]
+macro-paths: ["macros"]
+target-path: "target"
+clean-targets: ["target", "dbt_packages"]
+
+models:
+  vibestream:
+    silver:
+      +materialized: view           # Silver: lightweight views on Delta Lake
+      +schema: silver
+    gold:
+      +materialized: incremental    # Gold: incremental loads for feature freshness
+      +schema: gold
+      +unique_key: ['user_id', 'window_start']

@@ -1,0 +1,234 @@
+# ============================================================
+# VibeStream Real-Time Analytics Pipeline — Local Docker Setup
+# Stack: Kafka 4.0 (KRaft) + Spark 3.5 + Delta Lake + PostgreSQL + Jupyter
+# Blog: Building a Real-Time Social Media Analytics Pipeline
+# Author: <your-name>
+# ============================================================
+
+networks:
+  vibestream-net:
+    driver: bridge
+
+volumes:
+  kafka-data:
+  spark-warehouse:
+  delta-lake-data:
+  postgres-data:
+  jupyter-work:
+
+services:
+
+  # ─────────────────────────────────────────────────────────
+  # KAFKA 4.0 — KRaft Mode (No ZooKeeper needed)
+  # KRaft was made production-ready in Kafka 3.3 and
+  # ZooKeeper was fully removed in Kafka 4.0 (March 2025).
+  # ─────────────────────────────────────────────────────────
+  kafka:
+    image: apache/kafka:4.0.0
+    container_name: vibestream-kafka
+    hostname: kafka
+    networks:
+      - vibestream-net
+    ports:
+      - "9092:9092"       # For external Mac scripts (using localhost:9092)
+      - "29092:29092"     # For internal Docker tools (using kafka:29092)
+      - "9093:9093"       # KRaft controller internal port
+    environment:
+      # KRaft configuration — no ZooKeeper
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller        # Combined mode (ideal for local dev)
+      KAFKA_CONTROLLER_QUORUM_VOTERS: "1@kafka:9093"
+      # 1. Define the internal, external, and controller listener names
+      KAFKA_LISTENERS: EXTERNAL://0.0.0.0:9092,INTERNAL://0.0.0.0:29092,CONTROLLER://0.0.0.0:9093
+
+      # 2. This maps the protocol names to standard security schemas
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: EXTERNAL:PLAINTEXT,INTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT
+
+      # 3. CRITICAL: What the broker tells the client to reconnect to
+      KAFKA_ADVERTISED_LISTENERS: EXTERNAL://localhost:9092,INTERNAL://kafka:29092
+
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
+      # Topic defaults — production-aligned
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"      # Explicit topic creation enforced
+      KAFKA_DEFAULT_REPLICATION_FACTOR: 1           # Single broker in local dev
+      KAFKA_NUM_PARTITIONS: 3                       # 3 partitions per topic (matches Spark parallelism)
+      KAFKA_LOG_RETENTION_HOURS: 24                 # Keep 24h of events locally
+      KAFKA_LOG_SEGMENT_BYTES: 104857600            # 100MB segments
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0     # Faster rebalance in dev
+    volumes:
+      - kafka-data:/var/lib/kafka/data
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "9092"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+  # ─────────────────────────────────────────────────────────
+  # KAFKA TOPIC INITIALIZER
+  # Creates VibeStream topics on first startup.
+  # We avoid auto-create to enforce partition strategy:
+  #   - engagement_events  → 6 partitions (high-volume)
+  #   - user_sessions      → 3 partitions
+  #   - content_metadata   → 3 partitions
+  # ─────────────────────────────────────────────────────────
+  kafka-init:
+    image: apache/kafka:4.0.0
+    container_name: vibestream-kafka-init
+    networks:
+      - vibestream-net
+    depends_on:
+      kafka:
+        condition: service_healthy
+    entrypoint: ["/bin/bash", "-c"]
+    command:
+      - |
+        echo ">>> Creating VibeStream Kafka topics..."
+  
+        /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:29092 \
+          --create --if-not-exists \
+          --topic engagement_events \
+          --partitions 6 \
+          --replication-factor 1 \
+          --config retention.ms=86400000 \
+          --config cleanup.policy=delete
+  
+        /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:29092 \
+          --create --if-not-exists \
+          --topic user_sessions \
+          --partitions 3 \
+          --replication-factor 1
+  
+        /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:29092 \
+          --create --if-not-exists \
+          --topic content_metadata \
+          --partitions 3 \
+          --replication-factor 1
+  
+        echo ">>> Topics created. Listing all topics:"
+        /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:29092 --list
+        echo ">>> Done."
+    restart: on-failure
+
+  # ─────────────────────────────────────────────────────────
+  # SPARK MASTER — Spark 3.5 with Delta Lake 3.x
+  # Delta Lake 3.x requires Spark 3.5 (compatible pair).
+  # We mount a shared warehouse directory for Delta tables.
+  # ─────────────────────────────────────────────────────────
+  spark-master:
+    image: apache/spark:3.5.0
+    container_name: vibestream-spark-master
+    hostname: spark-master
+    networks:
+      - vibestream-net
+    ports:
+      - "8080:8080"     # Spark Master UI
+      - "7077:7077"     # Spark Master port
+      - "4040:4040"     # Spark Application UI (streaming job)
+    user: root          # Enforces permission handling for local Mac directory mounts
+    entrypoint: ["/opt/spark/bin/spark-class", "org.apache.spark.deploy.master.Master"]
+    environment:
+    #  - SPARK_MODE=master
+      - SPARK_MASTER_HOST=spark-master
+    #  - SPARK_RPC_AUTHENTICATION_ENABLED=no
+    #  - SPARK_RPC_ENCRYPTION_ENABLED=no
+      - SPARK_NO_DAEMONIZE=true
+    #command: >
+    #  /bin/bash -c "/opt/spark/sbin/start-master.sh &&
+    #  tail -f /opt/spark/logs/*"
+    volumes:
+      - spark-warehouse:/opt/spark-warehouse
+      - delta-lake-data:/opt/delta-lake
+      - ../spark_streaming:/opt/spark-apps      # Mount our streaming code
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  spark-worker:
+    image: apache/spark:3.5.0
+    container_name: vibestream-spark-worker
+    hostname: spark-worker
+    networks:
+      - vibestream-net
+    ports:
+      - "8081:8081"     # Spark Worker UI
+    user: root
+      # Use the official image's native execution path:
+    entrypoint: ["/opt/spark/bin/spark-class", "org.apache.spark.deploy.worker.Worker", "spark://spark-master:7077"]
+    environment:
+      #- SPARK_MODE=worker
+      #- SPARK_MASTER_URL=spark://spark-master:7077
+      - SPARK_WORKER_MEMORY=6G
+      - SPARK_WORKER_CORES=6
+      #- SPARK_RPC_AUTHENTICATION_ENABLED=no
+      #- SPARK_RPC_ENCRYPTION_ENABLED=no
+      - SPARK_NO_DAEMONIZE=true
+    #command: >
+    #  /bin/bash -c "/opt/spark/sbin/start-worker.sh spark://spark-master:7077 &&
+    #  tail -f /opt/spark/logs/*"
+    volumes:
+      - spark-warehouse:/opt/spark-warehouse
+      - delta-lake-data:/opt/delta-lake
+      - ../spark_streaming:/opt/spark-apps
+    depends_on:
+      spark-master:
+        condition: service_healthy
+
+  # ─────────────────────────────────────────────────────────
+  # POSTGRESQL — dbt metadata + Gold layer feature tables
+  # dbt-spark (local Thrift) writes Gold models here.
+  # Also serves as the Feature Store target for ML team.
+  # ─────────────────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: vibestream-postgres
+    hostname: postgres
+    networks:
+      - vibestream-net
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: vibestream
+      POSTGRES_PASSWORD: vibestream_local
+      POSTGRES_DB: vibestream_features
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./postgres-init:/docker-entrypoint-initdb.d   # SQL init scripts
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U vibestream -d vibestream_features"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  # ─────────────────────────────────────────────────────────
+  # JUPYTER LAB — Exploration & Development Notebooks
+  # Pre-installed with PySpark, Delta Lake, and Kafka libs.
+  # Access at http://localhost:8888 (token: vibestream)
+  # ─────────────────────────────────────────────────────────
+  jupyter:
+    image: jupyter/pyspark-notebook:spark-3.5.0
+    container_name: vibestream-jupyter
+    hostname: jupyter
+    networks:
+      - vibestream-net
+    ports:
+      - "8888:8888"
+    environment:
+      JUPYTER_TOKEN: vibestream
+      SPARK_MASTER: spark://spark-master:7077
+      PYSPARK_PYTHON: python3
+    volumes:
+      - jupyter-work:/home/jovyan/work
+      - ../notebooks:/home/jovyan/notebooks
+      - delta-lake-data:/home/jovyan/delta-lake
+    depends_on:
+      - spark-master
+    command: >
+      /bin/bash -c "
+      pip install --no-cache-dir psycopg2-binary &&
+      start-notebook.sh --NotebookApp.token='vibestream' --NotebookApp.password=''
+      "
