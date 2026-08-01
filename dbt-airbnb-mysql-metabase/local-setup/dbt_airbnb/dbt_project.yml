@@ -1,0 +1,59 @@
+
+# Name your project! Project names should contain only lowercase characters
+# and underscores. A good package name should reflect your organization's
+# name or the intended use of these models
+name: 'dbt_airbnb'
+version: '1.0.0'
+config-version: 2
+
+# This setting configures which "profile" dbt uses for this project.
+profile: 'dbt_airbnb'
+
+# These configurations specify where dbt should look for different types of files.
+# The `model-paths` config, for example, states that models in this project can be
+# found in the "models/" directory. You probably won't need to change these!
+model-paths: ["models"]         # directory where dbt looks for models, where all .sql files are compiled and run
+analysis-paths: ["analyses"]    # directory where dbt looks for analysis files which we want to execute manually, not as part of a run
+test-paths: ["tests"]            # directory where dbt looks for test files
+seed-paths: ["seeds"]            # directory where dbt looks for seed files, which are local CSV files that dbt can load into the data warehouse
+macro-paths: ["macros"]          # directory where dbt looks for macro files, which are reusable snippets of SQL that can be used across models, analyses, and tests
+snapshot-paths: ["snapshots"]    # directory where dbt looks for snapshot files, which are used to capture the state of a table at a point in time, often for slowly changing dimensions
+
+clean-targets:         # directories to be removed by `dbt clean`
+  - "target"           # default directory where dbt writes compiled SQL and run results
+  - "dbt_packages"     # default directory where dbt installs dependencies (packages)
+
+
+# Configuring models
+# Full documentation: https://docs.getdbt.com/docs/configuring-models
+
+# In this example config, we tell dbt to build all models in the example/
+# directory as views. These settings can be overridden in the individual model
+# files using the `{{ config(...) }}` macro.
+
+# Now, let's create a hook that creates an audit table for each model that is run by dbt
+on-run-start:
+  - "create table if not exists {{ target.schema }}.audit_table (model_name varchar(255), run_time timestamp)"
+
+models:
+  dbt_airbnb:                   # This is the name of the project, and it should match the name key above
+    +post-hook:
+      - "insert into {{ target.schema }}.audit_table (model_name, run_time) values ('{{ this.name }}', current_timestamp)"  # This hook will insert a record into the audit table every time a model is run, capturing the model name and the time of the run
+      # - "GRANT SELECT ON {{ target.schema }}.{{ this.name }} TO 'airbnb_user'@'%', 'reporter_user'@'%'"  # Granting select permission to all models in the DB. Includes user - reporter_user that will be used in BI tool
+    +materialized: view         # Default materialization in the current project
+    dimensions:                 # If we want to change materialization for specific models in a folder to other than default set above
+      +materialized: table
+    src:
+      +materialized: ephemeral
+    fct:
+      ++tags: ['fact']           # Adding tags to models in the fct folder, which can be used for grouping and selecting models during dbt runs. Tags are a flexible way to categorize models based on their purpose, such as 'fact' for fact tables, 'dimension' for dimension tables, etc. In this case, we are tagging all models in the fct folder with 'fact', which can help us easily identify and manage our fact tables in the project.
+
+tests:
+  +store_failures: true           # This setting tells dbt to store the results of failed tests in the target/ directory, which can be useful for debugging and historical reference. By default, dbt does not store failed test results, but with this setting enabled, you can find detailed information about test failures in the target/ directory after running dbt tests.
+  +store_failures_as: table
+  +schema: "test_snapshots"           # This setting tells dbt to use the default schema for storing test results, which is typically the same schema where the models are built. By default, dbt uses the same schema for test results as for models, but with this setting, you can explicitly specify that test results should be stored in the default schema. This can be useful for keeping test results organized and easily accessible alongside the models they are testing.
+                        # You will need the database - profiles.yml (schema) _ this.schema to store test case failures. Default value is dbt_test__audit
+                        # you might have to create this database/schema in your data warehouse if it doesn't exist, or change the value to an existing one. This is where dbt will store the results of failed tests when +store_failures is set to true.
+
+  vars:
+    user_name: default_user_name_macro_value # This is an example of how to set a variable in the dbt_project.yml file. Variables are placeholders that can be used in your models, analyses, and tests to make them more flexible and reusable. In this case, we are defining a variable called user_name with a default value of default_user_name_macro_value. You can reference this variable in your SQL files using the syntax {{ var('user_name') }}, and it will be replaced with the value defined here when the model is run. This allows you to easily change the value of user_name across all your models by simply updating it in one place in the dbt_project.yml file.

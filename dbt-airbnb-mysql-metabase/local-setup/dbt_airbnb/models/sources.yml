@@ -1,0 +1,26 @@
+sources:
+  - name: airbnb                    # Name of the source, used in ref() calls to refer to this source
+    schema: airbnb                  # Logical grouping of tables, often maps to a database or schema in the data warehouse. This is not the same as the "schema" key in the profiles.yml connection config, which is a quirk of how MySQL organizes databases and schemas.
+    tables:
+      - name: listings
+        identifier: raw_listings
+        columns:
+          - name: room_type         # Below is a dbt-expectations testcase to check distinct value on source
+            tests:
+              - dbt_expectations.expect_column_distinct_count_to_equal:
+                  value: 4
+          - name: price             # Below is a dbt-expectations testcase to check regex pattern on source
+            tests:
+              - dbt_expectations.expect_column_values_to_match_regex:
+                  regex: "^\\\\$[0-9][0-9\\\\.]+$"
+
+      - name: hosts
+        identifier: raw_hosts
+
+      - name: reviews
+        identifier: raw_reviews
+        config:                     # Optional configuration for this source, e.g. to set up data freshness checks
+          loaded_at_field: date     # Optional: specify a field in the source table that indicates when the data was loaded. This is used for data freshness checks.
+          freshness:
+            warn_after: { count: 1, period: hour }
+            # error_after: {count: 24, period: hour}

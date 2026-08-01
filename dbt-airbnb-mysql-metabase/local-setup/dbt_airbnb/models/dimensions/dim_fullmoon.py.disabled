@@ -1,0 +1,23 @@
+# Below is the script to demo how a python script works in DBT environment
+# It can be run as - dbt run -s dim_fullmoon
+# Since, I am working on old adapter to get everything on MySQL, this is not currently supported adapter in this version
+
+import holidays
+
+def is_holiday(date_col):
+    german_holidays = holidays.Germany()
+    is_holiday = (date_col in german_holidays)
+    return is_holiday
+
+def model(dbt, session):
+    dbt.config(
+        materialized = "table",
+        packages = ["holidays"],    # will install this package on destination platform environment
+        enabled=False # We add this line in the Model Lifecycle / Disabling Models section
+    )
+
+    orders_df = dbt.ref("seed_full_moon_dates")
+    df = orders_df.to_pandas()
+    df["IS_HOLIDAY"] = df["FULL_MOON_DATE"].apply(is_holiday)
+    # return final dataset (Pandas DataFrame)
+    return df

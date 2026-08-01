@@ -1,0 +1,24 @@
+dbt_airbnb:               #profile name, matches the profile: setting in dbt_project.yml
+  target: dev             # Which target to load for this profile. Targets are defined in the
+  outputs:                # Dictionary of connection configurations, one per target
+    dev:                  # Target name, referenced by the `target` key above
+      type: mysql         # The type of database. dbt uses this to determine which adapter to use. DBT needs to be installed with the adapter for this database, e.g. dbt-mysql
+      server: localhost
+      port: 3306
+      schema: airbnb      # logical "schema", maps to database in many mysql adapters
+      #database: airbnb   # not needed for mysql, but some adapters require both schema and database, so we include it for consistency with other profiles
+      username: airbnb_user
+      password: airbnb_password
+      ssl_disabled: true
+      threads: 1          # Default is one, I kept it same due to runing docker on other threads
+    # Now, let's see how it will look like in a production environment:
+    prod:
+      type: mysql         # The type of database. dbt uses this to determine which adapter to use. DBT needs to be installed with the adapter for this database, e.g. dbt-mysql
+      server: localhost
+      port: 3306
+      schema: airbnb      # logical "schema", maps to database in many mysql adapters
+      #database: airbnb   # not needed for mysql, but some adapters require both schema and database, so we include it for consistency with other profiles
+      username: airbnb_user
+      password: airbnb_password
+      ssl_disabled: true
+      threads: 1          # Default is one, I kept it same due to runing docker on other threads

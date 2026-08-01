@@ -1,0 +1,106 @@
+version: 2                        # It is needed as I am using older version of dbt-core to be compatible with MySQL, but in newer versions of dbt-core, this is not required and you can omit it.
+
+models:
+  - name: dim_listings_cleansed   # Name of the model, to run test on
+    description: Cleansed table which contains Airbnb listings.     # Description is optional but good to have for documentation purposes. It will be visible in the dbt docs site.
+    tests:
+      - minimum_row_count:
+          min_row_count: 1000     # Custom argument for this test, defined in tests/generic/minimum_row_count.sql as a custom test macro
+                                  # In later versions of dbt, it will come under tag arguments
+          # severity: warn       # We added this severity to the test definition itself
+                                 # Though we can override this setting for this particular test in case of depending upon generic severity level.
+    columns:
+      - name: listing_id
+        description: Primary key for the listing
+        tests:                    # In newer versions of dbt-core, you mention data_tests
+          - not_null
+          - unique
+      - name: host_id
+        description: The hosts's id. References the host table.
+        tests:
+          - not_null
+          - relationships:
+              to: ref('dim_hosts_cleansed')
+              field: host_id
+      - name: room_type
+        description: Type of the apartment / room
+        tests:
+          - accepted_values:
+              values:
+                - 'Entire home/apt'
+                - 'Private room'
+                - 'Shared room'
+                - 'Hotel room'
+      - name: minimum_nights
+        description: '{{ doc("dim_listing_cleansed__minimum_nights") }}'  # This is how you can reference the documentation blocks defined in .md files under the models/docs/ directory. It will be rendered as HTML in the dbt docs site.
+        tests:
+          - positive_values        # defined in tests/generic/positive_values.sql as a custom test macro
+
+  - name: dim_hosts_cleansed
+    #versions:
+     # - v: 1
+        # dbt looks for dim_hosts_cleansed.sql to build this version of the model
+        # if we do not explcitly specify the model name, it will get to dim_hosts_cleansed_v1.sql by default
+     #   defined_in: dim_hosts_cleansed
+        #deprecation_date: 2030-01-01
+     # - v: 2
+        # dbt looks for dim_hosts_cleansed_v2.sql to build this version of the model
+     #   columns:
+     #     - include: '*'        # what all columns from v1 are inherited in this version
+     #       exclude: [ host_name ]    # what columns are not inherited in this version
+     #     - name: host_name
+     #       description: The name of the host (N/A if not available)
+     #       data_type: string
+     #       constraints:
+     #         - type: not_null
+    # latest_version: 2
+    description: Cleansed table for the Airbnb hosts
+    config:
+      contract:
+        enforced: true
+    constraints:
+    - type: primary_key
+      columns: [ host_id ]    # We can define multiple columns in it as it accepts the list of columns
+    columns:
+      - name: host_id
+        data_type: integer
+        constraints:
+          - type: not_null
+
+      - name: host_name
+        data_type: string
+        constraints:
+            - type: not_null
+
+      - name: is_superhost
+        data_type: string
+
+      - name: updated_at
+        data_type: timestamp
+
+      - name: created_at
+        data_type: timestamp
+
+  - name: dim_listings_with_hosts
+    description: "Model to cross-reference listings with hosts data."
+    tests:
+      - dbt_expectations.expect_table_row_count_to_equal_other_table:
+          compare_model: source('airbnb', 'listings')
+    columns:
+        - name: price
+          tests:
+            # Below test case is not supported in mySQL so I will skip it and use the alternative approach
+            # This test case works on modern datawarehouse like Snowflake, BigQuery, Redshift, Databricks but not on MySQL
+            #- dbt_expectations.expect_column_quantile_values_to_be_between:
+            #    quantile: .99
+            #    min_value: 50
+            #    max_value: 500
+            - dbt_expectations.expect_column_mean_to_be_between:
+                min_value: 50
+                max_value: 300
+            - dbt_expectations.expect_column_max_to_be_between:
+                max_value: 5000
+                severity: warn
+            # Below test case is not aplicable on MySQL
+            #- dbt_expectations.expect_column_values_to_be_of_type:
+            #    column_type: decimal(10,2)

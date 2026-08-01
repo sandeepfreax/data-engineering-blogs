@@ -1,0 +1,8 @@
+snapshots:
+  - name: scd_raw_listings                    # We keep single snapshot in a file for debug and later reference, but you can have multiple snapshots in a file if you want. Just make sure each snapshot has a unique name.
+    relation: source('airbnb', 'listings')    # source() is a dbt macro that generates the correct reference to the raw listings table in the data warehouse, based on how the source is defined in the project. check sources.yml for more details.
+    config:
+      unique_key: id
+      strategy: timestamp                     # We have 3 strategies to use - timestamp, check and custom
+      updated_at: updated_at
+      hard_deletes: invalidate                # By default, dbt ignores deleted records in the source table, but with this setting, we can tell dbt to mark records as invalid when they are deleted from the source. This is useful for audit and historical purposes.

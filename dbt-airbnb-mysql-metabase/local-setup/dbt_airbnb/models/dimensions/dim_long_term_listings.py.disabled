@@ -1,0 +1,10 @@
+# Below is the script to demo how a python script works in DBT environment
+# It can be run as - dbt run -s dim_long_term_listings
+# Since, I am working on old adapter to get everything on MySQL, this is not currently supported adapter in this version
+
+def model(dbt, session):
+    listings = dbt.ref("dim_listings_with_hosts")
+
+    return (listings.filter(listings["MINIMUM_NIGHTS"] >= 30)
+                   .select("LISTING_ID", "LISTING_NAME", "PRICE"))
+
