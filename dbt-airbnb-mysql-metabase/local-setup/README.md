@@ -121,6 +121,9 @@ docker logs mysql
 - Docker compose and metabase storage: `docker/docker-compose.yml`, `docker/metabase-data/`
 - MySQL import helper: `extra.sql`
 
+Important: I could not upload RAW .csv due to the size issue. But, they can be downloaded from 
+[Airbnb Open Data](http://insideairbnb.com/get-the-data.html) and placed in the `resources/input_raw_data/` folder.
+
 Metabase Dashboard screenshot (example)
 ![Metabase Dashboard](./resources/images/dashboard_ss.png)
 
