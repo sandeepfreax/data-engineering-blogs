@@ -1,0 +1,13 @@
+statcan_lakehouse:
+  target: dev
+  outputs:
+    dev:
+      type: spark
+      method: session
+      host: localhost
+      schema: default
+      threads: 4
+      connect_args:
+        spark.sql.session.timeZone: "UTC"
+        spark.driver.memory: "1g"
+        spark.sql.shuffle.partitions: "8"

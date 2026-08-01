@@ -37,3 +37,12 @@ spark-warehouse/
 
 dbt_packages/
 target/
+mysql-data/
+postgres-data/
+sqlite-data/
+.user.yml
+.gitkeep
+package-lock.yml
+*.db
+pgdata/
+logs/
